@@ -26,9 +26,12 @@ class SortingChallenge(Task):
         self.object_rectangle = Shape('Rectangle')
         self.object_triangle = Shape('Triangle')
 
-        self.initial_z = 0.75  # Konstante Z-Position
+        self.initial_z = 0.77  # Z position  (because no parent)
 
-        self.register_graspable_objects(self.waypoints)
+        graspable_objects = [self.object_circle, self.object_cube, self.object_rectangle, self.object_triangle]
+
+        # register objects graspable for the panda
+        self.register_graspable_objects(graspable_objects)
 
     def _move_above_object(self, waypoint):
         if len(self.bin_objects_not_done) <= 0:
