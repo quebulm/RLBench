@@ -64,15 +64,16 @@ class SortingChallenge(Task):
             obj.set_color(color_rgb)
             color_indices.remove(color_choice)  # Ensure different colors for each object
 
-        # Success conditions
+        # # Success conditions
         conditions = []
-        for obj, sensor in self.object_to_sensor.items():
-            obj_instance = self.get_object_by_name(obj)
-            conditions.append(DetectedCondition(obj_instance, sensor))
-
+        # for obj, sensor in self.object_to_sensor.items():
+        #     obj_instance = self.get_object_by_name(obj)
+        #     conditions.append(DetectedCondition(obj_instance, sensor))
+        sensor = self.object_to_sensor[self.object_circle.get_name()]  # Sensor für das Kreisobjekt
+        conditions.append(DetectedCondition(self.object_circle, sensor))
         # Set the success conditions
         self.register_success_conditions(
-            [ConditionSet(conditions, simultaneously_met=True)])
+            [ConditionSet(conditions, simultaneously_met=True)]) # TODO true
 
         # # Platzieren der Objekte
         b = SpawnBoundary(self.spawn_boundaries)
@@ -82,7 +83,7 @@ class SortingChallenge(Task):
 
             # Setzen der neuen Position
             ob.set_position([0.0, 0.0, self.initial_z], relative_to=self.target, reset_dynamics=False)
-            b.sample(ob, ignore_collisions=False, min_distance=0.1)
+            b.sample(ob, ignore_collisions=False, min_distance=0.15)
 
             # Abrufen der neuen X- und Y-Position und Zurücksetzen auf die ursprüngliche Z-Position
             x, y, _ = ob.get_position()
@@ -142,13 +143,12 @@ class SortingChallenge(Task):
         # Called during each sim step. Remove this if not using.
         # iterate the not placed objects
         # Wird bei jedem Simulationsschritt aufgerufen.
-        for ob in self.bin_objects_not_done[:]:
-            sensor = self.object_to_sensor[ob.get_name()]
-            if sensor.is_detected(ob):
-                self.bin_objects_not_done.remove(ob)
-                # TODO: Setzen Sie hier die neuen Wegpunkte, wenn das Objekt erkannt wurde.
-               # self.set_pickup_waypoints(ob)
-               # self.set_dropoff_waypoint(sensor)
+        # for ob in self.bin_objects_not_done[:]:
+        #     sensor = self.object_to_sensor[ob.get_name()]
+        #     if sensor.is_detected(ob):
+        #         self.bin_objects_not_done.remove(ob)
+        #         # TODO: Setzen Sie hier die neuen Wegpunkte, wenn das Objekt erkannt wurde.
+        pass
 
     def cleanup(self) -> None:
 
