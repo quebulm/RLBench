@@ -26,7 +26,7 @@ class SortingChallenge(Task):
         self.object_rectangle = Shape('Rectangle')
         self.object_triangle = Shape('Triangle')
 
-        self.initial_z = 0.77  # Z position  (because no parent)
+        self.initial_z = 0.75  # Z position  (because no parent)
 
         graspable_objects = [self.object_circle, self.object_cube, self.object_rectangle, self.object_triangle]
 
@@ -91,7 +91,8 @@ class SortingChallenge(Task):
             # Wiederherstellen der ursprünglichen Rotation des Objekts
             ob.set_orientation(current_orientation)
 
-        selected_object = random.choice(self.spawned_objects)
+        #selected_object = random.choice(self.spawned_objects)
+        selected_object = self.object_circle
         print(f"selected Object: {selected_object.get_name()}")
         selected_object_pos = selected_object.get_position()
         print(f"Position von Object: {selected_object_pos}")
@@ -107,7 +108,7 @@ class SortingChallenge(Task):
         self.waypoints[3].set_position([dropoff_pos[0], dropoff_pos[1], self.initial_z+0.2], relative_to=None,
                                        reset_dynamics=False)
 
-        self.waypoints[4].set_position([dropoff_pos[0], dropoff_pos[1], self.initial_z+0.05], relative_to=None,
+        self.waypoints[4].set_position([dropoff_pos[0], dropoff_pos[1], self.initial_z+0.1], relative_to=None,
                                        reset_dynamics=False)
 
         # Debug-Ausgabe für die Position von Wegpunkt 3
