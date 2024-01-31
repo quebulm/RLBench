@@ -169,3 +169,7 @@ class SortingChallenge(Task):
 
     def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
         return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+
+    def reward(self) -> float:
+        return -np.linalg.norm(self.object_circle.get_position() -
+                               self.robot.arm.get_tip().get_position())
