@@ -24,10 +24,10 @@ def preprocess_observation(observation):
     # Flatten combined_data und füge eine Batch-Dimension hinzu
     combined_data = combined_data.unsqueeze(0)
 
-    print("Left Image Shape:", left_img.shape)
-    print("Right Image Shape:", right_img.shape)
-    print("Front Image Shape:", front_img.shape)
-    print("Combined Other Data Shape:", combined_data.shape)
+    # print("Left Image Shape:", left_img.shape)
+    # print("Right Image Shape:", right_img.shape)
+    # print("Front Image Shape:", front_img.shape)
+    # print("Combined Other Data Shape:", combined_data.shape)
 
     return (left_img, right_img, front_img), combined_data
 
@@ -57,10 +57,35 @@ class CNNEncoder(nn.Module):
     def forward(self, x):
         return self.conv_layers(x)
 
+
+def test_cnn_output_size(cnn_encoder, image_shape):
+    test_input = torch.rand(1, *image_shape)  # Erzeugt eine Testeingabe
+    test_output = cnn_encoder(test_input)
+    print(test_output.numel())
+    return test_output.numel()  # Gibt die Anzahl der Elemente in der CNN-Ausgabe zurück
+
+
 class CombinedModel(nn.Module):
     def __init__(self, action_shape):
         super(CombinedModel, self).__init__()
         self.cnn_encoder = CNNEncoder()
+
+        # Beispiel zur Bestimmung der CNN-Ausgabe Größe
+        cnn_encoder = CNNEncoder()
+        cnn_output_size = test_cnn_output_size(cnn_encoder, (3, 128, 128))
+        other_data_size = 15  # Basierend auf Ihrer Beschreibung
+
+        # Gesamtgröße für den Linear Layer anpassen
+        total_input_size = (cnn_output_size * 3) + other_data_size
+
+        print(cnn_output_size)
+        print(total_input_size)
+
+        self.fc_layers = nn.Sequential(
+            nn.Linear(total_input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, action_shape[0])
+        )
 
         # Angenommen, nach CNN sind die Bildfeatures von jeder Kamera 128*128
         # und du hast 3 Kameras + 7 Gripper/Joint-Daten + 1 Gripper-öffnen
@@ -71,18 +96,30 @@ class CombinedModel(nn.Module):
         )
 
     def forward(self, images, other_data):
-        img_features = [self.cnn_encoder(images[i]) for i in range(3)]
+        # Sicherstellen, dass alle Daten eine Batch-Dimension haben
+        images = [ensure_batch_dimension(img) for img in images]
+        other_data = ensure_batch_dimension(other_data)
 
-        # Stellen Sie sicher, dass other_data die gleiche Batch-Größe wie img_features hat
-        if other_data.dim() == 1:
-            other_data = other_data.unsqueeze(0)  # Fügt eine Batch-Dimension hinzu
-        if other_data.size(0) != img_features[0].size(0):
-            other_data = other_data.expand(img_features[0].size(0), -1)  # Passt die Batch-Größe an
+        # Verarbeitung der Bild-Features
+        img_features = [self.cnn_encoder(images[i]).view(1, -1) for i in range(3)]
 
+
+        # # Ausgabe der Formen der Eingabedaten
+        # print("Formen der Bilder:")
+        # for i, img in enumerate(images):
+        #     print(f"Bild {i} Form: {img.shape}")
+        # print(f"img_features:  {img_features}")
+        # print("Form der anderen Daten:", other_data.shape)
+
+        # Kombinieren der Features
         combined_features = torch.cat((*img_features, other_data), dim=1)
-        print("Kombinierte Features Größe:", combined_features.shape)
         return self.fc_layers(combined_features)
 
+def ensure_batch_dimension(tensor):
+    # Fügt eine Batch-Dimension hinzu, falls erforderlich
+    if tensor.dim() == 1:  # Nur Feature-Dimension
+        tensor = tensor.unsqueeze(0)  # Fügt Batch-Dimension hinzu
+    return tensor
 
 def preprocess_observation(observation):
     left_img = preprocess_image(observation.left_shoulder_rgb)
@@ -94,14 +131,14 @@ def preprocess_observation(observation):
     joint_positions = torch.tensor(observation.joint_positions, dtype=torch.float32)
     combined_data = torch.cat((gripper_pose, gripper_opening, joint_positions), dim=0)
 
-    # Debug-Prints zur Überprüfung der Dimensionen und Strukturen
-    print("Left Image Shape:", left_img.shape)
-    print("Right Image Shape:", right_img.shape)
-    print("Front Image Shape:", front_img.shape)
-    print("Combined Other Data Shape:", combined_data.shape)
+    # # Debug-Prints zur Überprüfung der Dimensionen und Strukturen
+    # print("Left Image Shape:", left_img.shape)
+    # print("Right Image Shape:", right_img.shape)
+    # print("Front Image Shape:", front_img.shape)
+    # print("Combined Other Data Shape:", combined_data.shape)
 
     return (left_img, right_img, front_img), combined_data
-
+from torchsummary import summary
 class DQNAgent(object):
 
     def __init__(self, action_shape):
@@ -113,37 +150,32 @@ class DQNAgent(object):
 
         self.loss_func = nn.MSELoss()
 
-    def train(self, images, other_data, actions, rewards, next_images, next_other_data, dones):
-        # Konvertiere die Bilddaten für current und next Zustände in Tensoren, wenn sie nicht bereits Tensoren sind
+    def train(self, images, other_data, action, rewards, next_images, next_other_data, dones):
+        # Konvertiere die Bilddaten für current und next Zustände in Tensoren
         images = [torch.tensor(img, dtype=torch.float32).to(self.device) for img in images] if not isinstance(images[0],
                                                                                                               torch.Tensor) else [
             img.to(self.device) for img in images]
         next_images = [torch.tensor(img, dtype=torch.float32).to(self.device) for img in next_images] if not isinstance(
             next_images[0], torch.Tensor) else [img.to(self.device) for img in next_images]
 
-        # send to device
+        # Konvertiere andere Daten in Tensoren und sende sie zum Gerät
         other_data = torch.tensor(other_data, dtype=torch.float32).to(self.device) if not isinstance(other_data,
                                                                                                      torch.Tensor) else other_data.to(
             self.device)
-        actions = torch.tensor(actions, dtype=torch.float32).to(self.device) if not isinstance(actions,
-                                                                                               torch.Tensor) else actions.to(
-            self.device)
-        rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device) if not isinstance(rewards,
-                                                                                               torch.Tensor) else rewards.to(
-            self.device)
         next_other_data = torch.tensor(next_other_data, dtype=torch.float32).to(self.device) if not isinstance(
             next_other_data, torch.Tensor) else next_other_data.to(self.device)
-        dones = torch.tensor(dones, dtype=torch.float32).to(self.device) if not isinstance(dones,
-                                                                                           torch.Tensor) else dones.to(
-            self.device)
+
+        # Konvertiere actions, rewards und dones in Tensoren
+        rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
+        dones = torch.tensor(dones, dtype=torch.float32).to(self.device)
 
         # Forward-Pass für aktuellen und nächsten Zustand
         q_values = self.model(images, other_data)
         next_q_values = self.model(next_images, next_other_data)
 
-        # Wähle die Q-Werte für die gewählten Aktionen
-        action_indices = actions.unsqueeze(-1) # Möglicherweise muss der Shape angepasst werden
-        chosen_q_values = q_values.gather(1, action_indices).squeeze()
+
+        # Verwende action direkt als chosen_q_values
+        chosen_q_values = q_values
 
         # Finde das Maximum der nächsten Q-Werte für alle Aktionen
         max_next_q_values = next_q_values.max(1)[0]
@@ -158,6 +190,14 @@ class DQNAgent(object):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+        # Debug-Prints für die Formen der Tensoren
+        # Debug-Prints für Belohnungen und Q-Werte
+        print("-----------------------------------------")
+        print("Rewards:", rewards)
+        print("Max next Q values:", max_next_q_values)
+        print("Expected Q values:", expected_q_values)
+        print("-----------------------------------------")
 
     def act(self, images, other_data):
         images = [img.to(self.device).unsqueeze(0) for img in images]
@@ -177,6 +217,17 @@ class DQNAgent(object):
         return action
 
 
+def calculate_reward(object_circle_position, gripper_tip_position):
+    # Berechne den Euclidean Abstand zwischen object_circle und der Greiferspitze
+    distance = np.linalg.norm(object_circle_position - gripper_tip_position)
+
+    # Berechne die Belohnung. Hier ein einfaches Beispiel, das eine negativ proportionale Belohnung zur Distanz erzeugt.
+    # Eine Annäherung an 0 (oder einen Minimalwert) kann nötig sein, um zu verhindern, dass die Belohnung unendlich groß wird.
+    reward = -distance
+
+    return reward
+
+
 env = Environment(
     action_mode=MoveArmThenGripper(arm_action_mode=JointVelocity(), gripper_action_mode=Discrete()),
     obs_config=ObservationConfig(),
@@ -188,37 +239,46 @@ task = env.get_task(SortingChallenge)
 # Reset task to get initial observation
 descriptions, observation = task.reset()
 
-# num_gripper_pose = 7      # Angenommen, basierend auf der Struktur von gripper_pose
-# num_gripper_opening = 1   # Ein einzelner Wert
-# num_joint_positions = 7   # Angenommen, basierend auf Ihrer Beschreibung
-#
-# # Gesamte Anzahl numerischer Beobachtungswerte
-# total_numeric_values = num_gripper_pose + num_gripper_opening + num_joint_positions
-#
-# # Die Total Observation Shape für die numerischen Daten ist dann die Summe dieser Werte
-# total_observation_shape_numeric = total_numeric_values  # Dies ergibt 15
 
 action_shape = (len(observation.joint_velocities) + 1,)  # +1 für den Greifer
 
 # Initialisiere den Agenten
 agent = DQNAgent(action_shape)
-training_steps = 10
-episode_length = 50
+training_steps = 0
+episode_length = 100
+
 
 # Initialzustand und -beobachtung
 descriptions, obs = task.reset()
 images, other_data = preprocess_observation(obs)
-
+from torchviz import make_dot
 for i in range(training_steps):
     if i % episode_length == 0:
         if i != 0:  # Vermeide doppeltes Zurücksetzen beim ersten Durchlauf
             print('Reset Episode')
             descriptions, obs = task.reset()
 
+        model = agent.model
         images, other_data = preprocess_observation(obs)
+        # Angenommen, images und other_data sind Ihre Input-Daten
+        images = [img.to('cuda') for img in images]
+        other_data = other_data.to('cuda')
 
-    action = agent.act(images, other_data)  # Act Methode erwartet jetzt direkt images und other_data
+        model_output = model(images, other_data)
+
+        # Erstellen der Visualisierung
+        dot = make_dot(model_output, params=dict(model.named_parameters()))
+
+        # Visualisierung speichern oder anzeigen
+        dot.render('combined_model_visualization', format='png')
+    action = agent.act(images, other_data)
+   # print("action:", action)  # Überprüfen Sie den Wert und die Form von action
+
     next_obs, reward, terminate = task.step(action)
+    # Holen Sie die Position des object_circle und der Greiferspitze
+    object_circle_position = np.array(task._task.get_object_circle_position())
+    gripper_tip_position = np.array(task._task.get_gripper_tip_position())
+    reward += calculate_reward(object_circle_position, gripper_tip_position)
     images_next, other_data_next = preprocess_observation(next_obs)
 
     # Vorverarbeitung der Belohnungen und terminal Zustände für das Training, möglicherweise Anpassung für Batch-Input erforderlich
@@ -231,12 +291,21 @@ for i in range(training_steps):
     # Nächste Beobachtungen für den nächsten Durchgang
     images, other_data = images_next, other_data_next
 
+
 print('Done with Training')
+# Speichern des trainierten Modells
+#torch.save(agent.model.state_dict(), 'model.pth')
 env.shutdown()
 
-# Laden Sie das trainierte Modell
+
 trained_model = agent.model
+
+# Laden des trainierten Modells
+trained_model.load_state_dict(torch.load('model.pth'))
 trained_model.eval()
+# Laden Sie das trainierte Modell
+#trained_model = agent.model
+#trained_model.eval()
 
 # RLBench-Umgebung für SortingChallenge
 sorting_env = Environment(
@@ -251,7 +320,7 @@ sorting_task = sorting_env.get_task(SortingChallenge)
 # Probe-Beobachtung zu erhalten
 descriptions, obs = sorting_task.reset()
 
-episode_length = 100
+episode_length = 50
 for i in range(episode_length):
     if i % episode_length == 0:
         print('Reset Episode')

@@ -22,24 +22,43 @@ env = Environment(
     action_mode=MoveArmThenGripper(
         arm_action_mode=JointVelocity(), gripper_action_mode=Discrete()),
     obs_config=ObservationConfig(),
-    headless=False)
+    headless=True)
 env.launch()
 
 task = env.get_task(ReachTarget)
 
 agent = Agent(env.action_shape)
 
-training_steps = 120
-episode_length = 40
-obs = None
-for i in range(training_steps):
+# Laden des trainierten Modells
+trained_model = agent.model.load_state_dict(torch.load('model.pth'))
+trained_model.eval()
+# Laden Sie das trainierte Modell
+#trained_model = agent.model
+#trained_model.eval()
+
+# RLBench-Umgebung für SortingChallenge
+sorting_env = Environment(
+    action_mode=MoveArmThenGripper(
+        arm_action_mode=JointVelocity(), gripper_action_mode=Discrete()),
+    obs_config=ObservationConfig(),
+    headless=False)
+sorting_env.launch()
+
+sorting_task = sorting_env.get_task(SortingChallenge)
+
+# Probe-Beobachtung zu erhalten
+descriptions, obs = sorting_task.reset()
+
+episode_length = 100
+for i in range(episode_length):
     if i % episode_length == 0:
         print('Reset Episode')
-        descriptions, obs = task.reset()
+        descriptions, obs = sorting_task.reset()
         print(descriptions)
-    action = agent.act(obs)
+    images, other_data = preprocess_observation(obs)  # Entpackt die Rückgabe von preprocess_observation
+    action = agent.act(images, other_data)  # Übergibt die beiden Teile separat an die act-Methode
     print(action)
-    obs, reward, terminate = task.step(action)
+    obs, reward, terminate = sorting_task.step((*action,))
 
 print('Done')
-env.shutdown()
+sorting_env.shutdown()

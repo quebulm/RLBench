@@ -122,7 +122,7 @@ class SortingChallenge(Task):
         self.waypoints[0].set_position([pickup_pos[0], pickup_pos[1], self.initial_z+0.2], relative_to=None,
                                        reset_dynamics=False)
 
-        self.waypoints[1].set_position([pickup_pos[0], pickup_pos[1], self.initial_z], relative_to=None,
+        self.waypoints[1].set_position([pickup_pos[0], pickup_pos[1], self.initial_z+0.01], relative_to=None,
                                        reset_dynamics=False)
 
 
@@ -139,16 +139,7 @@ class SortingChallenge(Task):
         # TODO: The number of variations for this task.
         return 1
 
-    def step(self) -> None:
-        # Called during each sim step. Remove this if not using.
-        # iterate the not placed objects
-        # Wird bei jedem Simulationsschritt aufgerufen.
-        # for ob in self.bin_objects_not_done[:]:
-        #     sensor = self.object_to_sensor[ob.get_name()]
-        #     if sensor.is_detected(ob):
-        #         self.bin_objects_not_done.remove(ob)
-        #         # TODO: Setzen Sie hier die neuen Wegpunkte, wenn das Objekt erkannt wurde.
-        pass
+
 
     def cleanup(self) -> None:
 
@@ -170,6 +161,9 @@ class SortingChallenge(Task):
     def base_rotation_bounds(self) -> Tuple[List[float], List[float]]:
         return [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
 
-    def reward(self) -> float:
-        return -np.linalg.norm(self.object_circle.get_position() -
-                               self.robot.arm.get_tip().get_position())
+    def get_object_circle_position(self):
+        # Vorausgesetzt, object_circle ist bereits initialisiert und hat eine get_position()-Methode
+        return self.object_circle.get_position()
+    def get_gripper_tip_position(self):
+        # Vorausgesetzt, object_circle ist bereits initialisiert und hat eine get_position()-Methode
+        return self.robot.arm.get_tip().get_position()
